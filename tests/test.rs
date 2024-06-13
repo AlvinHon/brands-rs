@@ -1,13 +1,8 @@
-mod coin;
-mod issuer;
-mod params;
-use issuer::Issuer;
-use params::{hash_to_number, Params};
-use spender::Spender;
-mod spender;
-mod withdrawal;
+use brands::{hash_to_number, Issuer, Params, Spender};
 
-fn main() {
+
+#[test]
+fn test() {
     let params = Params::new(1024 * 1024);
     println!(
         "p={} q={} g={} g1={} g2={}",
