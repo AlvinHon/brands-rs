@@ -2,7 +2,7 @@ use brands::{hash_to_number, Issuer, Params, Spender};
 
 
 #[test]
-fn test() {
+fn test_double_spent_coin_lifecycle() {
     let params = Params::new(1024 * 1024);
     println!(
         "p={} q={} g={} g1={} g2={}",
