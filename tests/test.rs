@@ -1,9 +1,8 @@
-use brands::{hash_to_number, Issuer, Params, Spender};
-
+use brands::{hash_to_number, Issuer, Spender};
 
 #[test]
 fn test_double_spent_coin_lifecycle() {
-    let params = Params::new(1024 * 1024);
+    let params = brands::random_params("brandskey".to_string(), 1024 * 1024);
     println!(
         "p={} q={} g={} g1={} g2={}",
         params.p, params.q, params.g, params.g1, params.g2

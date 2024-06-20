@@ -1,8 +1,5 @@
 mod coin;
-pub use coin::{
-    Coin,
-    SpentCoin
-};
+pub use coin::{Coin, SpentCoin};
 
 mod issuer;
 pub use issuer::Issuer;
@@ -14,7 +11,4 @@ mod spender;
 pub use spender::Spender;
 
 mod withdrawal;
-pub use withdrawal::{
-    WithdrawalParams,
-    Withdrawal
-};
+pub use withdrawal::{Withdrawal, WithdrawalParams};

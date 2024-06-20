@@ -2,7 +2,7 @@ use num_bigint::BigUint;
 
 use crate::{
     coin::{Coin, PartialCoin, SpentCoin},
-    params::{hash_to_number, random_number, Params, CHALLENGE_KEY},
+    params::{hash_to_number, random_number, Params},
     withdrawal::Withdrawal,
 };
 
@@ -57,7 +57,7 @@ impl Spender {
             * a.modpow(&partial_coin.v, &self.params.p);
         // cd = Hash(A,B,zd,ad,bd)
         let challenge_d = hash_to_number(
-            CHALLENGE_KEY.as_bytes(),
+            self.params.scheme_key.as_bytes(),
             &[
                 a.to_bytes_le(),
                 b.to_bytes_le(),

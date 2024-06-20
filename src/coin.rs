@@ -1,6 +1,6 @@
 use num_bigint::BigUint;
 
-use crate::params::{hash_to_number, Params, CHALLENGE_KEY};
+use crate::params::{hash_to_number, Params};
 
 #[derive(Clone)]
 pub struct PartialCoin {
@@ -29,7 +29,7 @@ impl Coin {
         }
 
         let ver_cd = hash_to_number(
-            CHALLENGE_KEY.as_bytes(),
+            params.scheme_key.as_bytes(),
             &[
                 self.c1.to_bytes_le(),
                 self.c2.to_bytes_le(),

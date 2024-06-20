@@ -8,8 +8,9 @@ name = "brands"
 path = "src/lib.rs"
 
 [dependencies]
-num-bigint = { version = "0.4.5", features = ["rand"] }
+num-bigint = { version = "0.4.5", features = ["rand", "serde"] }
 primes = "0.4.0"
 rand = "0.8.5"
 sha2 = "0.10.8"
+serde = { version = "1.0.203", features = ["derive"] }
 hmac = "0.12.1"

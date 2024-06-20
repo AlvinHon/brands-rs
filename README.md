@@ -6,15 +6,15 @@ It describes an electronic cash system that provides two key properties:
 1. Offline anonymous payment - payment can take place in private manner without accessing internet 
 2. Traceable double spender - the identity of spender will be revealed eventually if using same "digital cash" in other payments.
 
-**Note:** The code in this repository is not implemented for being used in production environment. Please take the risks into your considerations before you use it. Also, it is recommended to look at some security analysis on the scheme after the paper was published. 
+**Note:** The code in this repository is not implemented for being used in production environment. Please take the risks into your considerations before you use it. Also, it is recommended to look at some security analysis after the paper was published. 
 
 ### Payment Model
 
-The payment system involves:
-- `Isser` who issues coins to `Spender`, and traces double spenders upon receiving coin from `Receiver`;
+The payment system involves parties:
+- `Isser` who issues coins to `Spender`, and traces double spenders upon receiving coins from `Receiver`;
 - `Spender` who spends the coins in payment;
-- `Receiver` who deposits the coins back to `Issuer`
+- `Receiver` who receives coins and deposits them back to `Issuer`
 
-### Example
+### Usage
 
 TODO
