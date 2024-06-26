@@ -1,15 +1,26 @@
+//! Implements of the protocol steps involved by an Issuer in the scheme.
+
 use num_bigint::BigUint;
 
 use crate::{
-    coin::SpentCoin,
-    params::{random_number, Params},
-    withdrawal::WithdrawalParams,
+    cryptographics::random_number,
+    params::Params,
+    withdrawal::{WithdrawalChallenge, WithdrawalResponse},
+    Identity, RegistrationID, WithdrawalParams, WithdrawalResponseParams,
 };
 
+/// A mathematic representation of a coin issuer in the scheme, which implements
+/// methods for account registration, coins withdrawal and detecting double spent
+/// coins.
 pub struct Issuer {
-    params: Params,
-    pub h: BigUint,
-    x: BigUint, // (x, H) key pair by issuer, x is secret key
+    /// The public scheme parameters.
+    pub params: Params,
+    /// Identity of the issuer.
+    pub h: Identity,
+    /// The secret key of the issuer.
+    ///
+    /// (x, H) key pair by issuer, x is secret key
+    x: BigUint,
 }
 
 impl Issuer {
@@ -20,38 +31,44 @@ impl Issuer {
         Self { params, h, x }
     }
 
-    pub fn register(&self, i: &BigUint) -> BigUint {
+    /// Registers for opening an account to a spender, and gives back the
+    /// registration ID to spender.
+    ///
+    /// ## Mis-representation Attack
+    /// There is an attack to the scheme involving a bad user manipulating a false value of `i`
+    /// who can later double spend without being caught.
+    /// It is necessary for the issuer to ensture the authentication of the registration process.
+    pub fn register(&self, i: &Identity) -> RegistrationID {
         // z = (I * g2)^x
         (i * &self.params.g2).modpow(&self.x, &self.params.p)
     }
 
-    pub fn withdrawal_params(&self, i: &BigUint) -> WithdrawalParams {
+    /// Setting up the parameters for starting the withdrawal process which issues one
+    /// coin to the spender.
+    ///
+    /// The parameters will be used for creating [Withdrawal](crate::Withdrawal) by spender, and
+    /// [WithdrawalResponse](crate::WithdrawalResponse) by issuer.
+    pub fn setup_withdrawal_params(
+        &self,
+        i: &Identity,
+    ) -> (WithdrawalParams, WithdrawalResponseParams) {
         let w = random_number(&self.params.q);
         // a = g^w
         let a = self.params.g.modpow(&w, &self.params.p);
         // b = (i * g2)^w
         let b = (i * &self.params.g2).modpow(&w, &self.params.p);
-        WithdrawalParams { w, a, b }
+        (WithdrawalParams { a, b }, WithdrawalResponseParams { w })
     }
 
-    pub fn withdrawal_response(&self, withdrawal: &WithdrawalParams, c: &BigUint) -> BigUint {
+    /// Returns a response to the spender in withdrawal process. The response will then be used by
+    /// spender to make a coin.
+    pub fn withdrawal_response(
+        &self,
+        withdrawal: WithdrawalResponseParams,
+        challenge: &WithdrawalChallenge,
+    ) -> WithdrawalResponse {
         // r = w + c*x mod q
-        (&withdrawal.w + c * &self.x) % &self.params.q
-    }
-
-    pub fn double_spender_identity(&self, c1: &SpentCoin, c2: &SpentCoin) -> BigUint {
-        // g1 ^ ( (r1-r1') / (r2-r2') )
-        let r1_diff = if c1.r1 > c2.r1 {
-            &c1.r1 - &c2.r1
-        } else {
-            (&c1.r1 + &self.params.q - &c2.r1) % &self.params.q
-        };
-        let r2_diff = if c1.r2 > c2.r2 {
-            &c1.r2 - &c2.r2
-        } else {
-            (&c1.r2 + &self.params.q - &c2.r2) % &self.params.q
-        };
-        let exponent = (r1_diff * r2_diff.modinv(&self.params.q).unwrap()) % &self.params.q;
-        self.params.g1.modpow(&exponent, &self.params.p)
+        let r = (&withdrawal.w + &challenge.c * &self.x) % &self.params.q;
+        WithdrawalResponse { r }
     }
 }

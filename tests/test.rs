@@ -1,38 +1,38 @@
-use brands::{hash_to_number, Issuer, Spender};
+use brands::{CoinChallenge, Issuer, PartialCoin, Spender};
 
 #[test]
 fn test_double_spent_coin_lifecycle() {
     let params = brands::random_params("brandskey".to_string(), 1024 * 1024);
-    println!(
-        "p={} q={} g={} g1={} g2={}",
-        params.p, params.q, params.g, params.g1, params.g2
-    );
 
     let issuer = Issuer::new(params.clone());
     let mut spender = Spender::new(params.clone());
     println!("Spender Identity: {}", spender.i);
 
-    spender.set_registered(issuer.register(&spender.i));
-
     // Account Setup
-    let withdrawal_params = issuer.withdrawal_params(&spender.i);
-    let withdrawal = spender.withdraw(&withdrawal_params.a, &withdrawal_params.b);
-    let response = issuer.withdrawal_response(&withdrawal_params, &withdrawal.challenge);
-    assert!(spender.verify_withdrawal_response(&issuer.h, &response, &withdrawal));
+    spender.set_registration_id(issuer.register(&spender.i));
 
-    // Make a coin
-    let coin = spender.make_coin(response, withdrawal.clone());
+    // Withdraw a coin
+    let (withdrawal_params, withdrawal_response_params) =
+        issuer.setup_withdrawal_params(&spender.i);
+    let (withdrawal, withdrawal_challenge) = spender.withdraw(withdrawal_params);
+    let withdrawal_response =
+        issuer.withdrawal_response(withdrawal_response_params, &withdrawal_challenge);
+    assert!(spender.verify_withdrawal_response(
+        &issuer.h,
+        &withdrawal,
+        &withdrawal_challenge,
+        &withdrawal_response
+    ));
+    let coin = spender.make_coin(&withdrawal, withdrawal_response);
 
     // Spend a coin
     // 1. Receiver verifies the coin
     assert!(coin.verify(&issuer.h, &params));
     // 2. Receiver challenges the spender
-    let challenge = hash_to_number(
-        "shopA-payment-item-1718193570".as_bytes(),
-        &[coin.c1.to_bytes_le(), coin.c2.to_bytes_le()],
-    );
+    let challenge = CoinChallenge::new("shopA-payment-item-1718193570".as_bytes(), &coin);
     // 3. Spender responds
-    let spent_coin = spender.spent_coin(&coin, &challenge, &withdrawal);
+    let partial_coin = PartialCoin::from(withdrawal);
+    let spent_coin = spender.spend(coin.clone(), partial_coin.clone(), &challenge);
     // 4. Receiver verifies the spent coin
     assert!(spent_coin.verify(&challenge, &params));
 
@@ -40,11 +40,8 @@ fn test_double_spent_coin_lifecycle() {
     // .. Receiver sends spent_coin to issuer for checking if it is double spent ..
 
     // !! Spender double spending !!
-    let challenge_2 = hash_to_number(
-        "shopB-payment-item-1718193571".as_bytes(),
-        &[coin.c1.to_bytes_le(), coin.c2.to_bytes_le()],
-    );
-    let spent_coin_2 = spender.spent_coin(&coin, &challenge_2, &withdrawal);
+    let challenge_2 = CoinChallenge::new("shopB-payment-item-1718193571".as_bytes(), &coin);
+    let spent_coin_2 = spender.spend(coin.clone(), partial_coin, &challenge_2);
     assert!(spent_coin_2.verify(&challenge_2, &params));
 
     // Deposit the coin to Issuer
@@ -53,7 +50,7 @@ fn test_double_spent_coin_lifecycle() {
     // !! Issuer found same coin has been spent !!
 
     // Recover the identity of the spender
-    let i = issuer.double_spender_identity(&spent_coin, &spent_coin_2);
+    let i = spent_coin.reveal_identity(&spent_coin_2, &params);
     println!("Double spender is: {}", i);
     assert_eq!(i, spender.i);
 }

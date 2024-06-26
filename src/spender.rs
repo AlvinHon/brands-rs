@@ -1,16 +1,27 @@
+//! Implements of the protocol steps involved by a Spender in the scheme.
+
 use num_bigint::BigUint;
 
 use crate::{
-    coin::{Coin, PartialCoin, SpentCoin},
-    params::{hash_to_number, random_number, Params},
-    withdrawal::Withdrawal,
+    coin::{Coin, CoinChallenge, PartialCoin, SpentCoin},
+    cryptographics::{hash_to_number, random_number},
+    params::Params,
+    withdrawal::{Withdrawal, WithdrawalChallenge, WithdrawalResponse},
+    Identity, RegistrationID, WithdrawalParams,
 };
 
+/// A mathematic representation of a spender in the scheme, which implements
+/// methods for account registration, coins withdrawal and spending coins.
 pub struct Spender {
+    /// The public scheme parameters.
     pub params: Params,
-    pub i: BigUint,
-    pub u1: BigUint,
-    z: Option<BigUint>,
+    /// Identity of the spender.
+    pub i: Identity,
+    /// Secret value that the spender uses in spending a coin.
+    u1: BigUint,
+    /// The value given by the issuer for proving an issued coin.
+    /// None if the spender has not yet complete registration with issuer.
+    z: Option<RegistrationID>,
 }
 
 impl Spender {
@@ -26,11 +37,22 @@ impl Spender {
         }
     }
 
-    pub fn set_registered(&mut self, z: BigUint) {
-        self.z = Some(z);
+    /// Setting the value given by the issuer in registration process.
+    pub fn set_registration_id(&mut self, registration_id: RegistrationID) {
+        self.z = Some(registration_id);
     }
 
-    pub fn withdraw(&self, a_by_issuer: &BigUint, b_by_issuer: &BigUint) -> Withdrawal {
+    /// Returns a Withdrawal by computations with the withdrawal parameters given by Issuer.
+    /// A challenge is returned together for the spender to further check the validity of the
+    /// issued coin.
+    ///
+    /// ## Panics
+    /// Panics if the spender has not call [set_registration_id()](crate::Spender::set_registration_id)
+    /// before (i.e. has not received an registration ID from issuer).
+    pub fn withdraw(
+        &self,
+        withdrawal_spender_params: WithdrawalParams,
+    ) -> (Withdrawal, WithdrawalChallenge) {
         let partial_coin = PartialCoin {
             s: random_number(&self.params.q),
             x1: random_number(&self.params.q),
@@ -50,10 +72,14 @@ impl Spender {
             .unwrap()
             .modpow(&partial_coin.s, &self.params.p);
         // ad = a^u * g^v
-        let ad = a_by_issuer.modpow(&partial_coin.u, &self.params.p)
+        let ad = withdrawal_spender_params
+            .a
+            .modpow(&partial_coin.u, &self.params.p)
             * self.params.g.modpow(&partial_coin.v, &self.params.p);
         // bd = b^(s * u) * A^v
-        let bd = b_by_issuer.modpow(&(&partial_coin.s * &partial_coin.u), &self.params.p)
+        let bd = withdrawal_spender_params
+            .b
+            .modpow(&(&partial_coin.s * &partial_coin.u), &self.params.p)
             * a.modpow(&partial_coin.v, &self.params.p);
         // cd = Hash(A,B,zd,ad,bd)
         let challenge_d = hash_to_number(
@@ -70,33 +96,42 @@ impl Spender {
         let challenge =
             (&challenge_d * &partial_coin.u.modinv(&self.params.q).unwrap()) % &self.params.q;
 
-        Withdrawal {
-            a_by_issuer: a_by_issuer.clone(),
-            b_by_issuer: b_by_issuer.clone(),
-            challenge,
-            challenge_d,
-            a,
-            b,
-            zd,
-            ad,
-            bd,
-            partial_coin,
-        }
+        (
+            Withdrawal {
+                a_by_issuer: withdrawal_spender_params.a.clone(),
+                b_by_issuer: withdrawal_spender_params.b.clone(),
+                challenge_d,
+                a,
+                b,
+                zd,
+                ad,
+                bd,
+                partial_coin,
+            },
+            WithdrawalChallenge { c: challenge },
+        )
     }
 
+    /// Verifies the withdrawal response from issuer where the response will be used to create
+    /// a coin. This verification is an optional step in the protocol.
+    ///
+    /// ## Panics
+    /// Panics if the spender has not call [set_registration_id()](crate::Spender::set_registration_id)
+    /// before (i.e. has not received an registration ID from issuer).
     pub fn verify_withdrawal_response(
         &self,
-        h: &BigUint,
-        r: &BigUint,
+        h: &Identity,
         withdrawal: &Withdrawal,
+        withdrawal_challenge: &WithdrawalChallenge,
+        withdrawal_response: &WithdrawalResponse,
     ) -> bool {
         // (i * g2)^r == z^c * b
-        let lhs = (&self.i * &self.params.g2).modpow(r, &self.params.p);
+        let lhs = (&self.i * &self.params.g2).modpow(&withdrawal_response.r, &self.params.p);
         let rhs = (&self
             .z
             .as_ref()
             .unwrap()
-            .modpow(&withdrawal.challenge, &self.params.p)
+            .modpow(&withdrawal_challenge.c, &self.params.p)
             * &withdrawal.b_by_issuer)
             % &self.params.p;
         if lhs != rhs {
@@ -104,8 +139,8 @@ impl Spender {
         }
 
         // g ^ r == h^c * a
-        let lhs = self.params.g.modpow(r, &self.params.p);
-        let rhs = (h.modpow(&withdrawal.challenge, &self.params.p) * &withdrawal.a_by_issuer)
+        let lhs = self.params.g.modpow(&withdrawal_response.r, &self.params.p);
+        let rhs = (h.modpow(&withdrawal_challenge.c, &self.params.p) * &withdrawal.a_by_issuer)
             % &self.params.p;
         if lhs != rhs {
             return false;
@@ -114,16 +149,21 @@ impl Spender {
         true
     }
 
-    pub fn make_coin(&self, response: BigUint, withdrawal: Withdrawal) -> Coin {
-        let c1 = withdrawal.a;
-        let c2 = withdrawal.b;
-        let c3 = withdrawal.zd;
-        let c4 = withdrawal.ad;
-        let c5 = withdrawal.bd;
+    /// Makes a coin by the withdrawal response from issuer.
+    pub fn make_coin(
+        &self,
+        withdrawal: &Withdrawal,
+        withdrawal_response: WithdrawalResponse,
+    ) -> Coin {
+        let c1 = withdrawal.a.clone();
+        let c2 = withdrawal.b.clone();
+        let c3 = withdrawal.zd.clone();
+        let c4 = withdrawal.ad.clone();
+        let c5 = withdrawal.bd.clone();
         // rd = ru + v mod q
-        let c6 =
-            (response * withdrawal.partial_coin.u + withdrawal.partial_coin.v) % &self.params.q;
-        let cd = withdrawal.challenge_d;
+        let c6 = (withdrawal_response.r * &withdrawal.partial_coin.u + &withdrawal.partial_coin.v)
+            % &self.params.q;
+        let cd = withdrawal.challenge_d.clone();
         Coin {
             c1,
             c2,
@@ -135,16 +175,18 @@ impl Spender {
         }
     }
 
-    pub fn spent_coin(&self, coin: &Coin, d: &BigUint, withdrawal: &Withdrawal) -> SpentCoin {
+    /// Spends the coin given challenge by verifier. This is supposed to
+    /// be the last action by the spender on this coin.
+    pub fn spend(
+        &self,
+        coin: Coin,
+        partial_coin: PartialCoin,
+        challenge: &CoinChallenge,
+    ) -> SpentCoin {
         // r1 = d(u1)s + x1 mod q
-        let r1 = (d * &self.u1 * &withdrawal.partial_coin.s + &withdrawal.partial_coin.x1)
-            % &self.params.q;
+        let r1 = (&challenge.0 * &self.u1 * &partial_coin.s + &partial_coin.x1) % &self.params.q;
         // r2 = ds + x2 mod q
-        let r2 = (d * &withdrawal.partial_coin.s + &withdrawal.partial_coin.x2) % &self.params.q;
-        SpentCoin {
-            c: coin.clone(),
-            r1,
-            r2,
-        }
+        let r2 = (&challenge.0 * &partial_coin.s + &partial_coin.x2) % &self.params.q;
+        SpentCoin { coin, r1, r2 }
     }
 }

@@ -2,28 +2,26 @@
 
 use std::str::FromStr;
 
-use hmac::{Hmac, Mac};
 use num_bigint::BigUint;
 use primes::{PrimeSet, Sieve};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 
 /// Common Parameters used in brands scheme.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Params {
     /// A customizable string being used in coin withdrawal and verification.
-    pub scheme_key: String,
+    pub(crate) scheme_key: String,
 
     /// p = prime
-    pub p: BigUint,
+    pub(crate) p: BigUint,
     /// q = prime mod n, (i.e. max = n-1), p = 2q + 1, order(p)=n=2q
-    pub q: BigUint,
+    pub(crate) q: BigUint,
     /// g^q mod p == 1, q != 2
-    pub g: BigUint,
+    pub(crate) g: BigUint,
     /// g1^q mod p == 1, q != 2
-    pub g1: BigUint,
+    pub(crate) g1: BigUint,
     /// g2^q mod p == 1, q != 2
-    pub g2: BigUint,
+    pub(crate) g2: BigUint,
 }
 
 impl Params {
@@ -65,8 +63,8 @@ impl Params {
 
 /// Returns a [Params] with random parametric values.
 /// This function generates parametric values which are in 64-bit integers. The
-/// bit size is not very large hence this function is useful for development or
-/// testing purpose only.
+/// bit size is not very large hence this function is useful for **development or
+/// testing purpose only**.
 pub fn random_params(scheme_key: String, n: u64) -> Params {
     loop {
         let q = rand_prime(n);
@@ -109,27 +107,4 @@ fn find_generator(p: u64, q: u64) -> u64 {
             return a;
         }
     }
-}
-
-/// Returns a random number (mod m).
-pub fn random_number(m: &BigUint) -> BigUint {
-    BigUint::from(rand::random::<u64>()) % m
-}
-
-/// Converts a key-data pair into a number by using HMac-Sha256 over the content which is concatenation of
-/// key and data.
-pub fn hash_to_number<B: AsRef<[u8]>, T: AsRef<[B]>>(key: &[u8], data: &T) -> BigUint {
-    let strings_as_bytes: Vec<u8> = data
-        .as_ref()
-        .iter()
-        .flat_map(|s| s.as_ref().to_vec())
-        .collect();
-
-    let hash_bytes = Hmac::<Sha256>::new_from_slice(key)
-        .unwrap()
-        .chain_update(strings_as_bytes)
-        .finalize()
-        .into_bytes()
-        .to_vec();
-    BigUint::from_bytes_le(&hash_bytes)
 }
