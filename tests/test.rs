@@ -12,17 +12,22 @@ fn test_double_spent_coin_lifecycle() {
     spender.set_registration_id(issuer.register(&spender.i));
 
     // Withdraw a coin
+    // 1. Issuer setup parameters
     let (withdrawal_params, withdrawal_response_params) =
         issuer.setup_withdrawal_params(&spender.i);
+    // 2. Spender creates a challenge for issuer
     let (withdrawal, withdrawal_challenge) = spender.withdraw(withdrawal_params);
+    // 3. Issuer responses
     let withdrawal_response =
         issuer.withdrawal_response(withdrawal_response_params, &withdrawal_challenge);
+    // 4. (Optional) Spender verifies the response
     assert!(spender.verify_withdrawal_response(
         &issuer.h,
         &withdrawal,
         &withdrawal_challenge,
         &withdrawal_response
     ));
+    // 5. Spender makes a coin from the response
     let coin = spender.make_coin(&withdrawal, withdrawal_response);
 
     // Spend a coin
