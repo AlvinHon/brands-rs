@@ -1,8 +1,9 @@
-use brands::{CoinChallenge, Issuer, PartialCoin, Spender};
+use brands::{CoinChallenge, Issuer, Params, PartialCoin, Spender};
+use diffie_hellman_groups::MODPGroup5;
 
 #[test]
 fn test_double_spent_coin_lifecycle() {
-    let params = brands::random_params("brandskey".to_string(), 1024 * 1024);
+    let params = Params::from_dh_group::<MODPGroup5>("brandskey".to_string());
 
     let issuer = Issuer::new(params.clone());
     let mut spender = Spender::new(params.clone());

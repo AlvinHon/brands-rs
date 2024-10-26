@@ -2,8 +2,9 @@
 
 use std::str::FromStr;
 
+use diffie_hellman_groups::{MODPGroup, PrimeGroup};
 use num_bigint::BigUint;
-use primes::{PrimeSet, Sieve};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 /// Common Parameters used in brands scheme.
@@ -59,52 +60,55 @@ impl Params {
             g2: BigUint::from_str(g2).ok()?,
         })
     }
-}
 
-/// Returns a [Params] with random parametric values.
-/// This function generates parametric values which are in 64-bit integers. The
-/// bit size is not very large hence this function is useful for **development or
-/// testing purpose only**.
-pub fn random_params(scheme_key: String, n: u64) -> Params {
-    loop {
-        let q = rand_prime(n);
+    /// Instantiates [Params] from a [MODPGroup] group which is a Diffie-Hellman group.
+    /// The prime modulus `p` and Sophie Germain prime `q` are taken from the group.
+    /// The distinct generators `g`, `g1`, and `g2` are generated randomly with bits
+    /// ranging from 2 to the number of bits in the prime modulus `p`.
+    ///
+    ///
+    /// ### Example
+    /// ```
+    /// use diffie_hellman_groups::{MODPGroup, MODPGroup5};
+    ///
+    /// let params = brands::Params::from_dh_group::<MODPGroup5>("brandskey".to_string());
+    /// ```
+    pub fn from_dh_group<G: MODPGroup>(scheme_key: String) -> Self {
+        let p = G::prime_modulus();
+        let q = G::sophie_garmain_prime();
 
-        if q == 2 {
-            // not accepting q=2
-            continue;
+        let mut rng = rand::thread_rng();
+        let num_bits = rng.gen_range(2..p.bits() as usize);
+        let g = PrimeGroup::new::<G>(num_bits).g;
+        let g1;
+        let g2;
+        loop {
+            let num_bits = rng.gen_range(2..p.bits() as usize);
+            let g1_ = PrimeGroup::new::<G>(num_bits).g;
+
+            let num_bits = rng.gen_range(2..p.bits() as usize);
+            let g2_ = PrimeGroup::new::<G>(num_bits).g;
+
+            if g != g1_ && g != g2_ && g1_ != g2_ {
+                g1 = g1_;
+                g2 = g2_;
+                break;
+            }
         }
+        println!(
+            "g bits: {}, g1 bits: {}, g2 bits: {} ",
+            g.bits(),
+            g1.bits(),
+            g2.bits()
+        );
 
-        let p = q * 2 + 1;
-        if Sieve::new().is_prime(p) {
-            let a = find_generator(p, q);
-            let g1 = find_generator(p, q);
-            let g2 = find_generator(p, q);
-            return Params {
-                scheme_key,
-                p: BigUint::from(p),
-                q: BigUint::from(q),
-                g: BigUint::from(a),
-                g1: BigUint::from(g1),
-                g2: BigUint::from(g2),
-            };
-        }
-    }
-}
-
-/// Generates random prime with value less than `max`. It is used in the function [random_params].
-fn rand_prime(max: u64) -> u64 {
-    let n = rand::random::<u64>() % max;
-    let mut sieve = Sieve::new();
-    sieve.iter().find(|x| x >= &n).unwrap()
-}
-
-/// Finds the generator x where x^q mod p == 1.It is used in the function [random_params].
-fn find_generator(p: u64, q: u64) -> u64 {
-    loop {
-        let a = rand::random::<u64>() % p;
-        let res = BigUint::from(a).modpow(&BigUint::from(q), &BigUint::from(p));
-        if res == BigUint::from(1u64) {
-            return a;
+        Self {
+            scheme_key,
+            p,
+            q,
+            g,
+            g1,
+            g2,
         }
     }
 }
