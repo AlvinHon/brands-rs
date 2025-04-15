@@ -1,7 +1,12 @@
 [package]
 name = "brands-rs"
 version = "0.1.0"
+authors = ["AlvinHon <alvin.cpp@gmail.com>"]
 edition = "2021"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/AlvinHon/brands-rs"
+description = "A digital cash scheme"
 
 [lib]
 name = "brands"
