@@ -5,12 +5,13 @@
 //! before being spent ([Coin]), and after spent ([SpentCoin]).
 
 use num_bigint::BigUint;
+use serde::{Deserialize, Serialize};
 
 use crate::{cryptographics::hash_to_number, params::Params, Identity, Withdrawal};
 
 /// A mathematic representation of a "coin" which has not yet complete its creation
 /// during coin withdrawal process.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PartialCoin {
     pub(crate) s: BigUint,
     pub(crate) x1: BigUint,
@@ -29,7 +30,7 @@ impl From<Withdrawal> for PartialCoin {
 }
 
 /// A mathematic representation of a "coin" which is ready to be spent.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Coin {
     pub(crate) c1: BigUint,
     pub(crate) c2: BigUint,
@@ -42,6 +43,7 @@ pub struct Coin {
 
 /// A challenge created by coin receiver. The spender needs to give a response upon
 /// receiving this chanllenge in order to prove the ownership of the coin.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CoinChallenge(pub(crate) BigUint);
 
 impl CoinChallenge {
@@ -100,6 +102,7 @@ impl Coin {
 /// A mathematic representation of a "coin" which being spent. As compared to
 /// the struct [Coin], it includes additional parameters which are created by
 /// the spender upon a coin challenge during coin spending process.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SpentCoin {
     /// The coin sent by the spender.
     pub coin: Coin,

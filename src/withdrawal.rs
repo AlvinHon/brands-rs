@@ -1,6 +1,7 @@
 //! Defines structs that are useful in coin withdrawal process.
 
 use num_bigint::BigUint;
+use serde::{Deserialize, Serialize};
 
 use crate::coin::PartialCoin;
 
@@ -12,6 +13,7 @@ use crate::coin::PartialCoin;
 /// will be called in order to complete coin spending process.
 ///
 /// When the coin has been spent, this withdrawal is no longer useful.
+#[derive(Clone)]
 pub struct Withdrawal {
     /// a
     pub(crate) a_by_issuer: BigUint,
@@ -33,6 +35,7 @@ pub struct Withdrawal {
 ///
 /// This challenge will be used from issuer to create response, by calling the method
 /// [withdrawal_response](crate::Issuer::withdrawal_response).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct WithdrawalChallenge {
     pub(crate) c: BigUint,
 }
@@ -44,12 +47,14 @@ pub struct WithdrawalChallenge {
 ///
 /// The spender can also optionally verify the response beforehand, by calling
 /// the method [verify_withdrawal_response](crate::Spender::verify_withdrawal_response).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct WithdrawalResponse {
     pub(crate) r: BigUint,
 }
 
 /// Contains the parameters created by issuer. They are used by spender for
 /// creation of a [Withdrawal] during the coin withdrawal process.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct WithdrawalParams {
     pub(crate) a: BigUint,
     pub(crate) b: BigUint,
@@ -57,6 +62,7 @@ pub struct WithdrawalParams {
 
 /// Contains the parameters created by issuer. They are used by issuer for
 /// creation of a [WithdrawalResponse] during the coin withdrawal process.
+#[derive(Clone)]
 pub struct WithdrawalResponseParams {
     pub(crate) w: BigUint,
 }
